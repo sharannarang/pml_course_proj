@@ -6,6 +6,7 @@ output: html_document
 ## Reading the data
 ```{r Packages, echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 library(caret)
+library(ggplot2)
 ```
 
 Initially, the training data is loaded into R. The read.csv function is used to load the training data into a data frame.
@@ -27,7 +28,7 @@ pml.test <- pml.data.train[-inTrain,]
 
 Looking at the columns in the training data set, it is noticible that many of the features have a large number of 'NA' fields. In order to build a model, all the features with large proportion of NA values are removed. Any feature more than 95% NA values are eliminated from the dataset. 
 
-```{r remove NA, echo=TRUE, cache=TRUE}
+```{r remove NA, echo=FALSE, cache=TRUE}
 temp <- apply(pml.train, 2, is.na)
 temp <- apply(temp, 2, sum)
 temp <- temp/nrow(pml.train)
@@ -37,22 +38,48 @@ pml.train.subset <- pml.train[,non.na.cols]
 
 After removing the features with a high proportion of NAs, it is noticible that several of the remaining coloumns have a large number of blank entries. In order to check if these are useful, we use the nearZeroVar function to evaluate the variance of the features. A few of the features have near zero variance. These are also eliminated from the training data.
 
-```{r nzv, echo=TRUE,cache=TRUE}
+```{r nzv, echo=FALSE,cache=TRUE}
 nzv <- nearZeroVar(pml.train.subset, saveMetrics = TRUE)
 pml.train.subset <- pml.train.subset[,!nzv$nzv]
 ```
 
 Finally, the first few columns of the dataset contain row numbers, user names and time related information. These features are not useful in building a predictive model and are eliminated from the datatset. 
 
-```{r elminate time data, echo=TRUE, cache=TRUE}
+```{r elminate time data, echo=FALSE, cache=TRUE}
 non.useful.cols <- c(1:6)
 pml.train.subset <- pml.train.subset[,-non.useful.cols]
 ```
 
 As a result, we are left with a training dataset of `r ncol(pml.train.subset)` features. The same transformations are also applied to the testing subset of train dataset.
 
-```{r test data, echo=TRUE, cache=TRUE}
+```{r test data, echo=FALSE, cache=TRUE}
 pml.test.subset <- pml.test[,non.na.cols]
 pml.test.subset <- pml.test.subset[,!nzv$nzv]
 pml.test.subset <- pml.test.subset[,non.useful.cols]
+```
+
+## Pre-processing the training data
+The first step in pre-processing involves running a priciple component analysis and generating only principle components.
+
+```{r basic_pca, echo=FALSE,cache=TRUE}
+prComp <- preProcess(pml.train.subset[,-53], method="pca", pcaComp = 2)
+trainPC <- predict(prComp, pml.train.subset[,-53])
+ggplot(trainPC, aes(PC1, PC2))+geom_point(aes(color=pml.train.subset$classe)) + ggtitle("Principle Component Analysis with two components") + scale_color_discrete(name="Classe")
+```
+
+From the figure, we can see some segregation among the different classes even with just two components. 
+
+For the final model, we run principle component analysis on the training data with a threshold of 90%.
+
+```{r final_pca, echo=FALSE, cache=TRUE}
+prComp.final <- preProcess(pml.train.subset[,-53], method="pca", thresh=0.90)
+trainPC.final <- predict(prComp.final, pml.train.subset[,-53])
+```
+
+```{r}
+library(doParallel)
+cl <- makeCluster(detectCores())
+cl
+registerDoParallel(cl)
+rf.fit <- train(pml.train.subset$classe~.,data=trainPC.final,method="rf",prox=TRUE)
 ```
