@@ -15,7 +15,6 @@ Initially, the training data is loaded into R. The read.csv function is used to 
 pml.data.train <- read.csv("pml-training.csv")
 ```
 
-## Split into training and test set.
 Using the caret, the training dataset is then split into a training and test dataset using the createDataPartition function. The data is randomly sampled with 60% of the data belonging to the training dataset. 
 
 ```{r split train, echo=FALSE, cache=TRUE}
@@ -55,13 +54,22 @@ As a result, we are left with a training dataset of `r ncol(pml.train.subset)` f
 ```{r test data, echo=FALSE, cache=TRUE}
 pml.test.subset <- pml.test[,non.na.cols]
 pml.test.subset <- pml.test.subset[,!nzv$nzv]
-pml.test.subset <- pml.test.subset[,non.useful.cols]
+pml.test.subset <- pml.test.subset[,-non.useful.cols]
 ```
 
 ## Pre-processing the training data
-The first step in pre-processing involves running a priciple component analysis and generating only principle components.
+In order to explore the features in the training data set, we perform a random forest cross-validation to get an estimate of the number of features that would be required in building a model.
 
-```{r basic_pca, echo=FALSE,cache=TRUE}
+```{r rfcv, echo=FALSE, cache=TRUE}
+cv <- rfcv(pml.train.subset[,-53],pml.train.subset[,53], cv.fold = 5, step=0.7)
+```
+```{r rfcv fig, echo=FALSE}
+qplot(cv$error,cv$n.var,size=I(3.5)) + ggtitle("Random Forest Cross Validation for feature selection") + xlab("Error Rate") + ylab("Number of Variables")
+```
+
+Now, we use principle componenet analysis to shrink the feature space. The first step in pre-processing involves running a priciple component analysis and generating only 2 principle components.
+
+```{r basic_pca, echo=FALSE,cache=FALSE}
 prComp <- preProcess(pml.train.subset[,-53], method="pca", pcaComp = 2)
 trainPC <- predict(prComp, pml.train.subset[,-53])
 ggplot(trainPC, aes(PC1, PC2))+geom_point(aes(color=pml.train.subset$classe)) + ggtitle("Principle Component Analysis with two components") + scale_color_discrete(name="Classe")
@@ -76,10 +84,43 @@ prComp.final <- preProcess(pml.train.subset[,-53], method="pca", thresh=0.90)
 trainPC.final <- predict(prComp.final, pml.train.subset[,-53])
 ```
 
-```{r}
+A total of `r prComp.final$numComp` components are required to capture 90% variance from all the features. From the preprocessed object, a new set of features are created for the training dataset.
+
+## Build prediction model
+
+To build a prediction model, we use the random forest algorithm. In order to perform re-sampling, a bootstrap is used with replacement. Bootstrapping is performed 25 times to obtain the optimum prediction. To enable faster processing, the doParallel package is used. 
+
+
+```{r paralled processing model build, echo=FALSE, message=FALSE, cache=TRUE}
 library(doParallel)
 cl <- makeCluster(detectCores())
-cl
 registerDoParallel(cl)
-rf.fit <- train(pml.train.subset$classe~.,data=trainPC.final,method="rf",prox=TRUE)
+rf.fit <- train(pml.train.subset$classe ~ ., data = trainPC.final, method="rf")
 ```
+
+
+## Model Analysis
+
+In order to estimate the insample error rate, the model is used to predict the training data. 
+```{r in sample error, echo=TRUE}
+cf.train <- confusionMatrix(predict(rf.fit,trainPC.final), pml.train.subset$classe)
+cf.train$overall["Accuracy"]
+```
+
+Therefore, we observe that the model has 100% accuracy on the training data set. 
+
+The plot below shows the how each principle component impacts the GINI Index error rate. Clearly, all of the priniciple components contribute to the reduction in Gini index.
+
+```{r Variable imporatnce, echo=FALSE}
+varImpPlot(rf.fit$finalModel, main="Variable Importance", pch=20, color="blue")
+```
+
+## Out of Sample Error
+
+In order to estimate the out of sample error rate, the model is used to predict the testing data that was obtained by splitting the original training dataset. To obtain the principle components for the testng data, the preprocess object from the training data is used. 
+
+```{r testing pca, echo=FALSE, cache=TRUE}
+testPC.final <- predict(prComp.final, pml.test.subset[,-53])
+cf.test <- confusionMatrix(pml.test.subset$classe, predict(rf.fit, testPC.final))
+```
+
