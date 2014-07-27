@@ -66,7 +66,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <p>Looking at the columns in the training data set, it is noticible that many of the features have a large number of ‘NA’ fields. In order to build a model, all the features with large proportion of NA values are removed. Any feature more than 95% NA values are eliminated from the dataset.</p>
 <p>After removing the features with a high proportion of NAs, it is noticible that several of the remaining coloumns have a large number of blank entries. In order to check if these are useful, we use the nearZeroVar function to evaluate the variance of the features. A few of the features have near zero variance. These are also eliminated from the training data.</p>
 <p>Finally, the first few columns of the dataset contain row numbers, user names and time related information. These features are not useful in building a predictive model and are eliminated from the datatset.</p>
-<p>As a result, we are left with a training dataset of 53 features. The same transformations are also applied to the testing subset of train dataset.</p>
+<p>As a result, we are left with a training dataset of 52 features. The same transformations are also applied to the testing subset of train dataset.</p>
 </div>
 <div id="pre-processing-the-training-data" class="section level2">
 <h2>Pre-processing the training data</h2>
