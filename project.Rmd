@@ -49,7 +49,7 @@ non.useful.cols <- c(1:6)
 pml.train.subset <- pml.train.subset[,-non.useful.cols]
 ```
 
-As a result, we are left with a training dataset of `r ncol(pml.train.subset)` features. The same transformations are also applied to the testing subset of train dataset.
+As a result, we are left with a training dataset of `r ncol(pml.train.subset) - 1` features. The same transformations are also applied to the testing subset of train dataset.
 
 ```{r test data, echo=FALSE, cache=TRUE}
 pml.test.subset <- pml.test[,non.na.cols]
