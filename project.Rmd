@@ -1,5 +1,5 @@
 ---
-title: "Predict Exercise grades using Machine Learning"
+title: "Predict exercise grades using random forests"
 output: html_document
 ---
 
@@ -58,7 +58,7 @@ pml.test.subset <- pml.test.subset[,-non.useful.cols]
 ```
 
 ## Pre-processing the training data
-In order to explore the features in the training data set, we perform a random forest cross-validation to get an estimate of the number of features that would be required in building a model.
+In order to explore the features in the training data set, we perform a random forest cross-validation to get an estimate of the number of features that would be required in building a model. The random forest cross validation is performed using 5 folds and 70% of the features are retainded after every attempt. 
 
 ```{r rfcv, echo=FALSE, cache=TRUE}
 cv <- rfcv(pml.train.subset[,-53],pml.train.subset[,53], cv.fold = 5, step=0.7)
@@ -66,6 +66,8 @@ cv <- rfcv(pml.train.subset[,-53],pml.train.subset[,53], cv.fold = 5, step=0.7)
 ```{r rfcv fig, echo=FALSE}
 qplot(cv$error,cv$n.var,size=I(3.5)) + ggtitle("Random Forest Cross Validation for feature selection") + xlab("Error Rate") + ylab("Number of Variables")
 ```
+
+The figure above shows how the error rate increases as number of variables are reducded. The error rate doesn't go significantly above zero until the number of features is less than 10. Therefore, it is clear that we don't need to use all the 52 features to build the model. 
 
 Now, we use principle componenet analysis to shrink the feature space. The first step in pre-processing involves running a priciple component analysis and generating only 2 principle components.
 
@@ -86,10 +88,9 @@ trainPC.final <- predict(prComp.final, pml.train.subset[,-53])
 
 A total of `r prComp.final$numComp` components are required to capture 90% variance from all the features. From the preprocessed object, a new set of features are created for the training dataset.
 
-## Build prediction model
+## Prediction Model & Analysis
 
 To build a prediction model, we use the random forest algorithm. In order to perform re-sampling, a bootstrap is used with replacement. Bootstrapping is performed 25 times to obtain the optimum prediction. To enable faster processing, the doParallel package is used. 
-
 
 ```{r paralled processing model build, echo=FALSE, message=FALSE, cache=TRUE}
 library(doParallel)
@@ -97,9 +98,6 @@ cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 rf.fit <- train(pml.train.subset$classe ~ ., data = trainPC.final, method="rf")
 ```
-
-
-## Model Analysis
 
 In order to estimate the insample error rate, the model is used to predict the training data. 
 ```{r in sample error, echo=TRUE}
@@ -122,5 +120,7 @@ In order to estimate the out of sample error rate, the model is used to predict 
 ```{r testing pca, echo=FALSE, cache=TRUE}
 testPC.final <- predict(prComp.final, pml.test.subset[,-53])
 cf.test <- confusionMatrix(pml.test.subset$classe, predict(rf.fit, testPC.final))
+cf.test$overall
 ```
 
+Using confusion matrix, we see that an accuracy of `r cf.test$overall["Accuracy"]` is obtained. This implies that the out of sample error rate is `r 1-cf.test$overall["Accuracy"]`.
